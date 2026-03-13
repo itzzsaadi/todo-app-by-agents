@@ -1,24 +1,29 @@
-# ============================================
-# DEVELOPER AGENT — Reads plan, writes code
-# ============================================
-
 from crewai import Agent, Task, Crew, Process
 from dotenv import load_dotenv
 import os
+import json
 
 load_dotenv()
 
-# ── SAME GROQ SETUP ──────────────────────────
 os.environ["OPENAI_API_KEY"] = os.getenv("GROQ_API_KEY")
 os.environ["OPENAI_API_BASE"] = "https://api.groq.com/openai/v1"
 os.environ["OPENAI_MODEL_NAME"] = "llama-3.3-70b-versatile"
 
-# ── READ THE APPROVED PLAN ───────────────────
-# Load the plan that was approved in previous step
+# ── LOAD APPROVED PLAN ───────────────────────
 with open("outputs/plan_output.txt", "r", encoding="utf-8") as f:
     approved_plan = f.read()
 
-print("📄 Approved plan loaded successfully!")
+# ── LOAD ROUTING PLAN ────────────────────────
+with open("outputs/routing_plan.json", "r", encoding="utf-8") as f:
+    routing = json.load(f)
+
+print(f"Building: {routing['project_type']} — {routing['project_name']}")
+
+# ── BUILD DYNAMIC INSTRUCTIONS ───────────────
+files_list = "\n".join([
+    f"- {f['path']}: {f['description']}" 
+    for f in routing['files_to_create']
+])
 
 # ── AGENT: DEVELOPER ─────────────────────────
 developer = Agent(
@@ -45,52 +50,43 @@ tester = Agent(
 
 # ── TASK 1: WRITE THE CODE ───────────────────
 dev_task = Task(
-    description="""Based on this approved project plan:
+    description=f"""Based on this approved project plan:
 
-{approved_plan}
+{{approved_plan}}
 
-Write the COMPLETE Python code for this todo app.
+{routing['dev_instructions']}
 
-You must write ALL of these files completely:
+FILES YOU MUST CREATE:
+{files_list}
 
-FILE 1 — todo_app/src/data.py:
-- load_tasks() function: loads tasks from tasks.json, returns empty list if file doesn't exist
-- save_tasks() function: saves tasks list to tasks.json
+IMPORTANT RULES:
+- Write COMPLETE code for every file listed above
+- No placeholders, no "add code here" comments
+- Every file must be fully functional
+- Label each file clearly before its code block
+- Use proper code blocks with language tags
 
-FILE 2 — todo_app/src/task_manager.py:
-- add_task(title) function: adds a new task with id, title, completed=False
-- delete_task(task_id) function: removes task by id
-- complete_task(task_id) function: marks task as completed=True
-- list_tasks() function: returns all tasks
-
-FILE 3 — todo_app/src/main.py:
-- Command line interface with a menu
-- Options: 1=Add task, 2=List tasks, 3=Complete task, 4=Delete task, 5=Exit
-- Keep looping until user picks 5
-
-Write the FULL code for each file. No placeholders.""",
-    expected_output="Complete Python code for all 3 files clearly labeled",
+Project type: {routing['project_type']}
+Primary language: {routing['primary_language']}
+Entry point: {routing['entry_point']}""",
+    expected_output=f"Complete working code for all files: {files_list}",
     agent=developer
 )
 
 # ── TASK 2: WRITE THE TESTS ──────────────────
 test_task = Task(
-    description="""Write pytest tests for the todo app code that was just written.
+    description=f"""Review the code written by the developer.
 
-Write a complete test file: todo_app/tests/test_task_manager.py
+{routing['test_instructions']}
 
-Include tests for:
-1. test_add_task — adds a task and checks it exists
-2. test_delete_task — adds then deletes a task
-3. test_complete_task — adds a task then marks it complete
-4. test_list_tasks — checks list returns all tasks
-5. test_add_multiple_tasks — adds 3 tasks, checks count
+Project type: {routing['project_type']}
+Entry point: {routing['entry_point']}
 
-Make tests independent (use a fresh task list each time).
-Write complete, runnable pytest code.""",
-    expected_output="Complete pytest test file with all 5 tests",
+Write a PASS/FAIL checklist for each requirement.
+End with either APPROVED or NEEDS_FIXES.""",
+    expected_output="Checklist with APPROVED or NEEDS_FIXES verdict",
     agent=tester,
-    context=[dev_task]  # Tester reads the developer's code
+    context=[dev_task]
 )
 
 # ── THE CREW ─────────────────────────────────

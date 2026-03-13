@@ -90,8 +90,16 @@ print("🤖 AGENT PIPELINE STARTING...")
 print("="*50 + "\n")
 
 # This is where YOU describe your project
+# Read project idea from pipeline
+if os.path.exists("outputs/project_idea.txt"):
+    with open("outputs/project_idea.txt", "r", encoding="utf-8") as f:
+        project_idea = f.read().strip()
+    print(f"\nProject: {project_idea[:80]}...")
+else:
+    project_idea = input("Describe your project: ").strip()
+
 result = crew.kickoff(inputs={
-    "project_idea": "A simple todo app in Python with a command line interface. Users can add, delete, mark complete, and list tasks. Data should be saved to a file."
+    "project_idea": project_idea
 })
 
 print("\n" + "="*50)
